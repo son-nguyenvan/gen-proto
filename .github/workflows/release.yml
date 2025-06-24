@@ -34,4 +34,4 @@ jobs:
       - name: "🔧 Set configuration path"
         id: set-config
         run: |
-          echo "workdir: ${{ matrix.workdir }}"
+          echo "Release"
