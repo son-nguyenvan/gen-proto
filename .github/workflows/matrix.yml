@@ -12,7 +12,6 @@ on:
 
 jobs:
   strategy-matrix:
-    runs-on: anzx-default
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
 

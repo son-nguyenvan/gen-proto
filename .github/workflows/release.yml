@@ -1,0 +1,36 @@
+name: Release Drafter
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write  # Needed for creating releases
+  pull-requests: write
+  issues: write
+
+jobs:
+  prepare:
+    name: "Checkout"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+  get-module-diff:
+    name: "🔍 Get Module Diff"
+    needs: prepare
+    uses: ./.github/workflows/matrix.yml
+
+  draft-release:
+    name: "Draft Release"
+    needs: get-module-diff
+    runs-on: anzx-default
+    if: "!contains('${{ needs.get-module-diff.outputs.matrix }}', '[]')"
+    strategy:
+      matrix: ${{ fromJson(needs.get-module-diff.outputs.matrix) }}
+    steps:
+      - name: "🔧 Set configuration path"
+        id: set-config
+        run: |
+          echo "workdir: ${{ matrix.workdir }}"
