@@ -59,7 +59,7 @@ jobs:
           declare -a CI_CHECK
           CICD=false
           for directory in ${PATHS}; do
-            if [[ $DIFF == *"$directory"* ]]; then
+            if echo "$DIFF" | grep -qE "^${directory}(/|\\.go$)"; then
               cmp=$(echo $directory | cut -d'/' -f2)
               CI_CHECK+=$(echo '{"component":"'${cmp}'"},')
             fi
