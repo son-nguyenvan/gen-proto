@@ -1,0 +1,63 @@
+name: Strategy 𝍔 Matrix
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/matrix.yml"
+  workflow_call:
+    outputs:
+      matrix:
+        description: "Get Module Diff"
+        value: ${{ jobs.strategy-matrix.outputs.matrix }}
+
+jobs:
+  strategy-matrix:
+    runs-on: anzx-default
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+
+    steps:
+      - name: "🛒 Checkout repository"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "⚙️ Set up Git"
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git fetch origin main
+
+      - name: "⊹ Set matrix"
+        id: set-matrix
+        shell: bash
+        run: |
+          PATHS=$(find . -type f -name 'go.mod' -exec dirname {} \; | cut -c3-)
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            DIFF=$(git diff --no-commit-id --name-only ${{ github.sha }} ${{ github.event.before }})
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            DIFF=$(git diff --no-commit-id --name-only ${{ github.event.pull_request.base.sha }}..${{ github.sha }})
+          else
+            echo "Unknown event type, stop workflow."
+            exit 1
+          fi
+
+          echo "Changed files:"
+          echo "$DIFF"
+
+          CI_CHECK=()
+          for directory in ${PATHS}; do
+            if [[ $DIFF == *"$directory"* ]]; then
+              CI_CHECK+=("{\"workdir\":\"${directory}\"}")
+            fi
+          done
+
+          # Add tag-based directory (for release event)
+          if [[ -n "${{ github.event.release.tag_name }}" ]]; then
+            pkg=$(echo "${{ github.event.release.tag_name }}" | sed 's:/.*//')
+            echo "Releasing Package: ${pkg}"
+            CI_CHECK+=("{\"workdir\":\"${pkg}\"}")
+          fi
+
+          MATRIX_JSON=$(printf '{"include":[%s]}' "$(IFS=,; echo "${CI_CHECK[*]}")")
+          echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"
+          echo "$MATRIX_JSON"
