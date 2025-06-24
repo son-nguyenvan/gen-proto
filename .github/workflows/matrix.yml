@@ -31,26 +31,48 @@ jobs:
         id: set-matrix
         shell: bash
         run: |
-          PATHS=$(find . -type f -name 'go.mod' -exec dirname {} \; | cut -c3-)
-          DIFF=$(git diff origin/main --name-only)
+          PATHS=$(find . -type f -name 'go.mod' ! -path './.github/apps/*' -exec dirname {} \; | cut -b 3-)
+          echo " "
+          echo "PATHS:"
+          echo "${PATHS}"
+          echo " "
 
-          echo "Changed files:"
-          echo "$DIFF"
+          echo " "
+          echo "github.event_name: ${{ github.event_name }}"
+          echo "github.event.pull_request.merged: ${{ github.event.pull_request.merged }}"
+          echo " "
 
-          CI_CHECK=()
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            DIFF=$(git diff --no-commit-id --name-only ${{ github.sha }} ${{ github.event.before }})
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            DIFF=$(git diff --no-commit-id --name-only ${{ github.event.pull_request.base.sha }}..${{ github.sha }})
+          else
+            echo "Unknown event type, stop workflow."
+            exit 1
+          fi
+
+          echo " "
+          echo "DIFF:"
+          echo "${DIFF}"
+          echo " "
+
+          declare -a CI_CHECK
+          CICD=false
           for directory in ${PATHS}; do
-            if echo "$DIFF" | grep -q "^${directory}/"; then
-              CI_CHECK+=("{\"workdir\":\"${directory}\"}")
+            if [[ $DIFF == *"$directory"* ]]; then
+              cmp=$(echo $directory | cut -d'/' -f2)
+              CI_CHECK+=$(echo '{"component":"'${cmp}'"},')
+            fi
+            if [[ $DIFF == *".github"* ]]; then
+              CICD=true
             fi
           done
 
-          # Add tag-based directory (for release event)
-          if [[ -n "${{ github.event.release.tag_name }}" ]]; then
-            pkg=$(echo "${{ github.event.release.tag_name }}" | sed 's:/.*//')
-            echo "Releasing Package: ${pkg}"
-            CI_CHECK+=("{\"workdir\":\"${pkg}\"}")
+          echo "$CI_CHECK"
+          if [[ $CICD == "true" ]]; then
+            CI_CHECK+=$(echo '{"component":"'cicd'"},')
           fi
 
-          MATRIX_JSON=$(printf '{"include":[%s]}\n' "$(IFS=,; echo "${CI_CHECK[*]}")")
-          echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"
-          echo "$MATRIX_JSON"
+          echo "matrix={\"include\":[${CI_CHECK%?}]}" >> $GITHUB_OUTPUT
+
+          cat $GITHUB_OUTPUT
