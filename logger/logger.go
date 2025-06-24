@@ -7,3 +7,7 @@ func GetLog() string {
 func GetLevel() string {
 	return ""
 }
+
+func FakeLog() string {
+	return "Fake"
+}
